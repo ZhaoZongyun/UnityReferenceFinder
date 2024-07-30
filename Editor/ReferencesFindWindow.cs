@@ -17,7 +17,7 @@ public class ReferencesFindWindow : EditorWindow
     private bool isDepend = false;
     private bool needUpdate = false;
 
-    [MenuItem("Assets/Find References %q", false)]
+    [MenuItem("Assets/Find References %q", false, 25)]
     static void FindReferences()
     {
         reference.CollectDependenciesInfo();
@@ -36,7 +36,8 @@ public class ReferencesFindWindow : EditorWindow
             if (Directory.Exists(path))
             {
                 //如果是文件夹，则选择文件夹下所有文件
-                string[] guids = AssetDatabase.FindAssets(path);
+                DirectoryInfo direction = new DirectoryInfo(path);
+                string[] guids = AssetDatabase.FindAssets("", new string[] { path });
                 foreach (var guid in guids)
                 {
                     if (!Directory.Exists(AssetDatabase.GUIDToAssetPath(guid)) && !selectedGuidList.Contains(guid))
@@ -74,25 +75,34 @@ public class ReferencesFindWindow : EditorWindow
     {
         EditorGUILayout.BeginHorizontal(topbarStyle);
         // 刷新引用信息
-        if (GUILayout.Button("Refresh Data", buttonStyle))
+        if (GUILayout.Button("Refresh Data", buttonStyle, GUILayout.Width(120)))
         {
             reference.CollectDependenciesInfo(true);
             needUpdate = true;
         }
 
         bool temp = isDepend;
-        isDepend = GUILayout.Toggle(isDepend, isDepend ? "依赖" : "被依赖", buttonStyle, GUILayout.Width(100));
+        isDepend = GUILayout.Toggle(isDepend, isDepend ? "依赖" : "被依赖", buttonStyle, GUILayout.Width(120));
 
         if (temp != isDepend)
             needUpdate = true;
 
         GUILayout.FlexibleSpace();
 
+        //展开第一级
+        if (GUILayout.Button("Expand", buttonStyle, GUILayout.Width(120)))
+            if (assetTreeView != null)
+            {
+                foreach (var item in assetTreeView.GetRows())
+                    assetTreeView.SetExpanded(item.id, true);
+            }
+
         //展开
-        if (GUILayout.Button("Expand", buttonStyle))
+        if (GUILayout.Button("ExpandAll", buttonStyle, GUILayout.Width(120)))
             if (assetTreeView != null) assetTreeView.ExpandAll();
+
         //折叠
-        if (GUILayout.Button("Collapse", buttonStyle))
+        if (GUILayout.Button("Collapse", buttonStyle, GUILayout.Width(120)))
             if (assetTreeView != null) assetTreeView.CollapseAll();
 
         EditorGUILayout.EndHorizontal();
