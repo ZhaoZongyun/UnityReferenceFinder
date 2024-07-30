@@ -36,7 +36,6 @@ public class ReferencesFindWindow : EditorWindow
             if (Directory.Exists(path))
             {
                 //如果是文件夹，则选择文件夹下所有文件
-                DirectoryInfo direction = new DirectoryInfo(path);
                 string[] guids = AssetDatabase.FindAssets("", new string[] { path });
                 foreach (var guid in guids)
                 {
