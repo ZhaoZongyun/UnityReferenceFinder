@@ -15,7 +15,7 @@ public class ReferencesFindWindow : EditorWindow
     private static ReferenceData reference = new ReferenceData();
 
     private bool isDepend = false;
-    private bool needUpdate = false;
+    private bool needRefreshTree = false;
 
     [MenuItem("Assets/Find References %q", false, 25)]
     static void FindReferences()
@@ -25,6 +25,13 @@ public class ReferencesFindWindow : EditorWindow
         ReferencesFindWindow window = GetWindow<ReferencesFindWindow>("Find References");
         window.wantsMouseMove = false;
         window.RefreshWindow();
+    }
+
+    private void OnEnable()
+    {
+        topbarStyle = new GUIStyle("Toolbar");
+        buttonStyle = new GUIStyle("ToolbarButton");
+        isDepend = EditorPrefs.GetBool("IsDepend", true);
     }
 
     private void RefreshWindow()
@@ -51,23 +58,14 @@ public class ReferencesFindWindow : EditorWindow
                 selectedGuidList.Add(guid);
             }
         }
-        needUpdate = true;
-    }
-
-    private void OnEnable()
-    {
-        topbarStyle = new GUIStyle("Toolbar");
-        buttonStyle = new GUIStyle("ToolbarButton");
+        needRefreshTree = true;
     }
 
     private void OnGUI()
     {
         DrawTopBar();
         UpdateAssetTree();
-        if (assetTreeView != null)
-        {
-            assetTreeView.OnGUI(new Rect(0, topbarStyle.fixedHeight, position.width, position.height - topbarStyle.fixedHeight));
-        }
+        assetTreeView.OnGUI(new Rect(0, topbarStyle.fixedHeight, position.width, position.height - topbarStyle.fixedHeight));
     }
 
     private void DrawTopBar()
@@ -77,19 +75,22 @@ public class ReferencesFindWindow : EditorWindow
         if (GUILayout.Button("Refresh Data", buttonStyle, GUILayout.Width(120)))
         {
             reference.CollectDependenciesInfo(true);
-            needUpdate = true;
+            needRefreshTree = true;
         }
 
         bool temp = isDepend;
         isDepend = GUILayout.Toggle(isDepend, isDepend ? "依赖" : "被依赖", buttonStyle, GUILayout.Width(120));
 
         if (temp != isDepend)
-            needUpdate = true;
+        {
+            EditorPrefs.SetBool("IsDepend", isDepend);
+            needRefreshTree = true;
+        }
 
         GUILayout.FlexibleSpace();
 
         //展开第一级
-        if (GUILayout.Button("Expand", buttonStyle, GUILayout.Width(120)))
+        if (GUILayout.Button("ExpandTop", buttonStyle, GUILayout.Width(120)))
             if (assetTreeView != null)
             {
                 foreach (var item in assetTreeView.GetRows())
@@ -109,7 +110,7 @@ public class ReferencesFindWindow : EditorWindow
 
     private void UpdateAssetTree()
     {
-        if (needUpdate && selectedGuidList.Count > 0)
+        if (needRefreshTree && selectedGuidList.Count > 0)
         {
             if (assetTreeView == null)
                 assetTreeView = AssetTreeView.Create();
@@ -117,9 +118,11 @@ public class ReferencesFindWindow : EditorWindow
             assetTreeView.assetRoot = CreateRootItem();
             assetTreeView.CollapseAll();
             assetTreeView.Reload();
-            needUpdate = false;
+            needRefreshTree = false;
         }
     }
+
+    private List<string> childList;
 
     /// <summary>
     /// 创建树根
@@ -127,6 +130,11 @@ public class ReferencesFindWindow : EditorWindow
     /// <returns></returns>
     private AssetViewItem CreateRootItem()
     {
+        if (childList == null)
+            childList = new List<string>();
+        else
+            childList.Clear();
+
         int count = 0;
         var root = new AssetViewItem()
         {
@@ -140,7 +148,8 @@ public class ReferencesFindWindow : EditorWindow
         foreach (var guid in selectedGuidList)
         {
             var item = CreateItem(guid, ref count, depth);
-            root.AddChild(item);
+            if (item != null)
+                root.AddChild(item);
         }
 
         return root;
@@ -148,7 +157,7 @@ public class ReferencesFindWindow : EditorWindow
 
     private AssetViewItem CreateItem(string guid, ref int count, int depth)
     {
-        var desc = reference.GetAndUpdateDescription(guid);
+        var desc = reference.GetDescription(guid);
         if (desc == null)
             return null;
 
@@ -161,11 +170,17 @@ public class ReferencesFindWindow : EditorWindow
             data = desc,
         };
 
-        var guids = isDepend ? desc.dependencies : desc.beDependencies;
-        foreach (var g in guids)
+        // 防止出现嵌套（A依赖B，B依赖C，C依赖A 的情况）时，造成死循环，出现嵌套时不再添加子节点
+        if (!childList.Contains(guid))
         {
-            var childItem = CreateItem(g, ref count, depth + 1);
-            item.AddChild(childItem);
+            childList.Add(guid);
+            var guids = isDepend ? desc.dependencies : desc.beDependencies;
+            foreach (var g in guids)
+            {
+                var childItem = CreateItem(g, ref count, depth + 1);
+                if (childItem != null)
+                    item.AddChild(childItem);
+            }
         }
 
         return item;
