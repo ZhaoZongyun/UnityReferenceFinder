@@ -94,17 +94,22 @@ public class ReferenceData
         }
     }
 
-    public AssetDescription GetAndUpdateDescription(string guid)
+    public AssetDescription GetDescription(string guid)
     {
         if (assetDict.ContainsKey(guid))
         {
             var desc = assetDict[guid];
             if (File.Exists(desc.path))
             {
-                if (desc.dependencyHash != AssetDatabase.GetAssetDependencyHash(desc.path).ToString())
-                    desc.state = AssetState.changed;
+                if (AssetDatabase.LoadAssetAtPath(desc.path, typeof(Object)) == null)
+                    desc.state = AssetState.invalid;
                 else
-                    desc.state = AssetState.normal;
+                {
+                    if (desc.dependencyHash != AssetDatabase.GetAssetDependencyHash(desc.path).ToString())
+                        desc.state = AssetState.changed;
+                    else
+                        desc.state = AssetState.normal;
+                }
             }
             else
                 desc.state = AssetState.missing;

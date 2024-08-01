@@ -43,27 +43,34 @@ public class AssetTreeView : TreeView
 
     private void DrawItem(Rect cellRect, AssetViewItem item, Colum colum, ref RowGUIArgs args)
     {
-        switch (colum)
+        if (item.data == null)
         {
-            case Colum.Name:
-                var iconRect = cellRect;
-                iconRect.x += GetContentIndent(item);
-                iconRect.width = ICON_WIDTH;
-                if (iconRect.x < cellRect.xMax)
-                {
-                    var icon = GetIcon(item.data.path);
-                    if (icon != null)
-                        GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit);
-                    args.rowRect = cellRect;
-                    base.RowGUI(args);
-                }
-                break;
-            case Colum.Path:
-                GUI.Label(cellRect, item.data.path);
-                break;
-            case Colum.State:
-                GUI.Label(cellRect, GetStateString(item.data.state), stateStyle);
-                break;
+            base.RowGUI(args);
+        }
+        else
+        {
+            switch (colum)
+            {
+                case Colum.Name:
+                    var iconRect = cellRect;
+                    iconRect.x += GetContentIndent(item);
+                    iconRect.width = ICON_WIDTH;
+                    if (iconRect.x < cellRect.xMax)
+                    {
+                        var icon = GetIcon(item, item.data.path);
+                        if (icon != null)
+                            GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit);
+                        args.rowRect = cellRect;
+                        base.RowGUI(args);
+                    }
+                    break;
+                case Colum.Path:
+                    GUI.Label(cellRect, item.data.path);
+                    break;
+                case Colum.State:
+                    GUI.Label(cellRect, GetStateString(item.data.state), stateStyle);
+                    break;
+            }
         }
     }
 
@@ -72,17 +79,19 @@ public class AssetTreeView : TreeView
         switch (assetState)
         {
             case AssetState.changed:
-                return "<color=#F0672AFF>Changed</color>";
+                return "<color=#F0672A>Changed</color>";
             case AssetState.missing:
-                return "<color=#FF0000FF>Missing</color>";
+                return "<color=#FF0000>Missing</color>";
+            case AssetState.invalid:
+                return "<color=#FFFF00>Invalid</color>";
         }
 
         return "Normal";
     }
 
-    private Texture2D GetIcon(string path)
+    private Texture2D GetIcon(AssetViewItem item, string path)
     {
-        var asset = AssetDatabase.LoadAssetAtPath(path, typeof(UnityEngine.Object));
+        var asset = AssetDatabase.LoadAssetAtPath(path, typeof(Object));
         if (asset != null)
         {
             Texture2D icon = AssetPreview.GetMiniThumbnail(asset);
@@ -162,19 +171,22 @@ public class AssetTreeView : TreeView
         return state;
     }
 
-    /// <summary>
-    /// 双击事件
-    /// </summary>
-    /// <param name="id"></param>
-    protected override void DoubleClickedItem(int id)
+    protected override void SelectionChanged(IList<int> selectedIds)
     {
-        var item = (AssetViewItem)FindItem(id, rootItem);
-        if (item != null)
+        List<Object> selectList = new List<Object>();
+        foreach (var id in selectedIds)
         {
-            var asset = AssetDatabase.LoadAssetAtPath(item.data.path, typeof(UnityEngine.Object));
-            EditorUtility.FocusProjectWindow();
-            Selection.activeObject = asset;
-            EditorGUIUtility.PingObject(asset);
+            AssetViewItem item = FindItem(id, rootItem) as AssetViewItem;
+            if (item != null && item.data != null)
+            {
+                var asset = AssetDatabase.LoadAssetAtPath(item.data.path, typeof(Object));
+                if (asset != null && !selectList.Contains(asset))
+                {
+                    selectList.Add(asset);
+                }
+            }
         }
+
+        Selection.objects = selectList.ToArray();
     }
 }

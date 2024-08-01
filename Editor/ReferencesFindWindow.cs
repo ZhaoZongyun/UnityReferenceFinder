@@ -1,5 +1,7 @@
+using NPOI.SS.Formula.Functions;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,15 +14,18 @@ public class ReferencesFindWindow : EditorWindow
     //工具栏样式
     private GUIStyle buttonStyle;
     private AssetTreeView assetTreeView;
-    private static ReferenceData reference = new ReferenceData();
+    private static ReferenceData data = new ReferenceData();
 
     private bool isDepend = false;
     private bool needRefreshTree = false;
 
+    private bool isTile = false;
+    private List<string> referenceList = new List<string>();
+
     [MenuItem("Assets/Find References %q", false, 25)]
     static void FindReferences()
     {
-        reference.CollectDependenciesInfo();
+        data.CollectDependenciesInfo();
 
         ReferencesFindWindow window = GetWindow<ReferencesFindWindow>("Find References");
         window.wantsMouseMove = false;
@@ -65,7 +70,8 @@ public class ReferencesFindWindow : EditorWindow
     {
         DrawTopBar();
         UpdateAssetTree();
-        assetTreeView.OnGUI(new Rect(0, topbarStyle.fixedHeight, position.width, position.height - topbarStyle.fixedHeight));
+        if (assetTreeView != null)
+            assetTreeView.OnGUI(new Rect(0, topbarStyle.fixedHeight, position.width, position.height - topbarStyle.fixedHeight));
     }
 
     private void DrawTopBar()
@@ -74,13 +80,12 @@ public class ReferencesFindWindow : EditorWindow
         // 刷新引用信息
         if (GUILayout.Button("Refresh Data", buttonStyle, GUILayout.Width(120)))
         {
-            reference.CollectDependenciesInfo(true);
+            data.CollectDependenciesInfo(true);
             needRefreshTree = true;
         }
 
         bool temp = isDepend;
         isDepend = GUILayout.Toggle(isDepend, isDepend ? "依赖" : "被依赖", buttonStyle, GUILayout.Width(120));
-
         if (temp != isDepend)
         {
             EditorPrefs.SetBool("IsDepend", isDepend);
@@ -88,6 +93,14 @@ public class ReferencesFindWindow : EditorWindow
         }
 
         GUILayout.FlexibleSpace();
+
+        //平铺
+        temp = isTile;
+        isTile = GUILayout.Toggle(isTile, isTile ? "平铺" : "树形", buttonStyle, GUILayout.Width(120));
+        if (temp != isTile)
+        {
+            needRefreshTree = true;
+        }
 
         //展开第一级
         if (GUILayout.Button("ExpandTop", buttonStyle, GUILayout.Width(120)))
@@ -115,11 +128,70 @@ public class ReferencesFindWindow : EditorWindow
             if (assetTreeView == null)
                 assetTreeView = AssetTreeView.Create();
 
-            assetTreeView.assetRoot = CreateRootItem();
+            if (isTile)
+                assetTreeView.assetRoot = CreateRootItemTile();
+            else
+                assetTreeView.assetRoot = CreateRootItem();
             assetTreeView.CollapseAll();
             assetTreeView.Reload();
             needRefreshTree = false;
         }
+    }
+
+    /// <summary>
+    /// 创建树根（平铺）
+    /// </summary>
+    /// <returns></returns>
+    private AssetViewItem CreateRootItemTile()
+    {
+        int count = -1;
+        var root = NewItem(null, ref count, "Root", -1, null);
+
+        NewItem(root, ref count, "=== Select Assets ===", 0, null);
+
+        referenceList.Clear();
+        foreach (var guid in selectedGuidList)
+        {
+            var desc = data.GetDescription(guid);
+            if (desc != null)
+            {
+                NewItem(root, ref count, desc.name, 0, desc);
+
+                var guids = isDepend ? desc.dependencies : desc.beDependencies;
+                foreach (var g in guids)
+                {
+                    if (!referenceList.Contains(g))
+                        referenceList.Add(g);
+                }
+            }
+        }
+
+        NewItem(root, ref count, "=== Reference Assets ===", 0, null);
+
+        foreach (var reference in referenceList)
+        {
+            var desc = data.GetDescription(reference);
+            if (desc != null)
+                NewItem(root, ref count, desc.name, 0, desc);
+        }
+
+        return root;
+    }
+
+    private AssetViewItem NewItem(AssetViewItem parent, ref int count, string name, int depth, AssetDescription desc)
+    {
+        count++;
+        var item = new AssetViewItem
+        {
+            id = count,
+            displayName = name,
+            depth = depth,
+            data = desc,
+        };
+
+        if (parent != null)
+            parent.AddChild(item);
+        return item;
     }
 
     private List<string> childList;
@@ -157,7 +229,7 @@ public class ReferencesFindWindow : EditorWindow
 
     private AssetViewItem CreateItem(string guid, ref int count, int depth)
     {
-        var desc = reference.GetDescription(guid);
+        var desc = data.GetDescription(guid);
         if (desc == null)
             return null;
 
@@ -170,7 +242,7 @@ public class ReferencesFindWindow : EditorWindow
             data = desc,
         };
 
-        // 防止出现嵌套（A依赖B，B依赖C，C依赖A 的情况）时，造成死循环，出现嵌套时不再添加子节点
+        // 防止出现嵌套（A依赖B，B依赖C，C依赖A 的情况）时，造成死循环，出现嵌套时不再向下添加子节点
         if (!childList.Contains(guid))
         {
             childList.Add(guid);
@@ -209,11 +281,22 @@ public class AssetDescription
     /// </summary>
     public List<string> beDependencies = new List<string>();
     public AssetState state = AssetState.normal;
+    public string note;
 }
 
 public enum AssetState
 {
     normal,
+    /// <summary>
+    /// 依赖信息改变
+    /// </summary>
     changed,
+    /// <summary>
+    /// 文件不存在
+    /// </summary>
     missing,
+    /// <summary>
+    /// AssetDatabase 加载不到
+    /// </summary>
+    invalid,
 }
