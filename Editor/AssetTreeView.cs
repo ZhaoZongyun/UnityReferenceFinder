@@ -124,6 +124,12 @@ public class AssetTreeView : TreeView
         showBorder = true;
         customFoldoutYOffset = (ROW_HEIGHT - EditorGUIUtility.singleLineHeight) * 0.5f;
         extraSpaceBeforeIconAndLabel = ROW_HEIGHT;
+        multiColumnHeader.sortingChanged += OnSortingChanged;
+    }
+
+    private void OnSortingChanged(MultiColumnHeader multiColumnHeader)
+    {
+        
     }
 
     /// <summary>
@@ -138,7 +144,7 @@ public class AssetTreeView : TreeView
                 headerContent = new GUIContent("Name"),
                 headerTextAlignment = TextAlignment.Center,
                 sortedAscending = false,
-                width = 200,
+                width = 300,
                 minWidth = 60,
                 autoResize = false,
                 allowToggleVisibility = false,
@@ -148,7 +154,7 @@ public class AssetTreeView : TreeView
                 headerContent = new GUIContent("Path"),
                 headerTextAlignment = TextAlignment.Center,
                 sortedAscending = false,
-                width = 360,
+                width = 600,
                 minWidth = 60,
                 autoResize = false,
                 allowToggleVisibility = true,
