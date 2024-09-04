@@ -1,0 +1,7 @@
+1. 说明
+（1）xxx的依赖，指的是：该文件依赖的文件（即该文件引用了哪些文件）
+（2）xxx的被依赖，指的是：哪些文件依赖该文件
+2. Unity 的 Select Dependencies 指的是（1），没有实现（2）
+3. Unity2022 提供了右键 Find Reference In Project 功能，但没有卵用。
+    于是参考 https://github.com/blueberryzzz/ReferenceFinder。实现了一个高效的查找某资源文件的被依赖项
+
