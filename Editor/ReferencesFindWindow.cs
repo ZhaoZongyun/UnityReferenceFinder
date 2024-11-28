@@ -3,8 +3,16 @@ using System.IO;
 using UnityEditor;
 using UnityEngine;
 
+
 public class ReferencesFindWindow : EditorWindow
 {
+    public enum SortMode
+    {
+        path,   // 按资源路径排序
+        name,   // 按资源名称排序
+        type,   // 按资源类型路径排序
+    }
+
     /// <summary>
     /// 选择的对象
     /// </summary>
@@ -21,7 +29,10 @@ public class ReferencesFindWindow : EditorWindow
     private bool needRefreshTree = false;
 
     private bool isTile = true;
-    private List<string> referenceList = new List<string>();
+    private List<string> resultList = new List<string>();
+    private List<string> recursiveList = new List<string>();
+
+    private SortMode sortMode = SortMode.path;
 
     [MenuItem("Assets/Find References &q", false, 25)]
     static void FindReferences()
@@ -96,6 +107,33 @@ public class ReferencesFindWindow : EditorWindow
             needRefreshTree = true;
         }
 
+        if (GUILayout.Button("路径排序", buttonStyle, GUILayout.Width(120)))
+        {
+            if (sortMode!= SortMode.path)
+            {
+                sortMode = SortMode.path;
+                needRefreshTree = true;
+            }
+        }
+
+        if (GUILayout.Button("名称排序", buttonStyle, GUILayout.Width(120)))
+        {
+            if (sortMode != SortMode.name)
+            {
+                sortMode = SortMode.name;
+                needRefreshTree = true;
+            }
+        }
+
+        if (GUILayout.Button("类型排序", buttonStyle, GUILayout.Width(120)))
+        {
+            if (sortMode != SortMode.type)
+            {
+                sortMode = SortMode.type;
+                needRefreshTree = true;
+            }
+        }
+
         GUILayout.FlexibleSpace();
 
         //平铺
@@ -138,11 +176,6 @@ public class ReferencesFindWindow : EditorWindow
             else
                 assetTreeView.assetRoot = CreateRootItemTree();
 
-            if (assetTreeView.assetRoot.children != null)
-            {
-
-            }
-
             assetTreeView.CollapseAll();
             assetTreeView.Reload();
             if (!isTile)
@@ -164,9 +197,9 @@ public class ReferencesFindWindow : EditorWindow
         int count = -1;
         var root = NewItem(null, ref count, "Root", -1, null);
 
-        NewItem(root, ref count, "===== 选中的资源 =====", 0, null);
+        NewItem(root, ref count, "===== 选中的资源 ===== " + selectedGuidList.Count, 0, null);
 
-        referenceList.Clear();
+        resultList.Clear();
         foreach (var guid in selectedGuidList)
         {
             var desc = data.GetDescription(guid);
@@ -181,80 +214,76 @@ public class ReferencesFindWindow : EditorWindow
                 else
                     Recursive(desc.beDependencies, recursiveList);
 
+                // 去重
                 foreach (var g in recursiveList)
                 {
-                    if (!referenceList.Contains(g))
-                        referenceList.Add(g);
+                    if (!resultList.Contains(g))
+                        resultList.Add(g);
                 }
             }
         }
 
-        referenceList.Sort((string a, string b) =>
+        // 排序后展示列表
+        resultList.Sort((string guidA, string guidB) =>
         {
-            var desc1 = data.GetDescription(a);
-            var desc2 = data.GetDescription(b);
-            if (desc1 != null && desc2 != null)
-            {
-                return desc1.path.CompareTo(desc2.path);
-            }
+            var desc1 = data.GetDescription(guidA);
+            var desc2 = data.GetDescription(guidB);
 
+            if (desc1 != null && desc2 != null) {
+
+                switch (sortMode)
+                {
+                    case SortMode.path:
+                        return desc1.path.CompareTo(desc2.path);
+                    case SortMode.name:
+                        return desc1.name.CompareTo(desc2.name);
+                    case SortMode.type:
+                        return desc1.ext.CompareTo(desc2.ext);
+                }
+            }
             return 0;
         });
 
         if (isDepend)
-            NewItem(root, ref count, "===== 依赖 =====", 0, null);
+            NewItem(root, ref count, "===== 依赖 ===== " + resultList.Count, 0, null);
         else
-            NewItem(root, ref count, "===== 被依赖 =====", 0, null);
+            NewItem(root, ref count, "===== 被依赖 ===== " + resultList.Count, 0, null);
 
-        foreach (var reference in referenceList)
+        foreach (var result in resultList)
         {
-            var desc = data.GetDescription(reference);
+            var desc = data.GetDescription(result);
             if (desc != null)
                 NewItem(root, ref count, desc.name, 0, desc);
+            else
+            {
+                Debug.Log("找不到 Guid " + desc.path);
+            }
         }
 
         return root;
     }
 
-    private List<string> recursiveList = new List<string>();
     // 递归获取所有引用
-    private void Recursive(List<string> guidList, List<string> resultList)
+    private void Recursive(List<string> guidList, List<string> tempList)
     {
         for (int i = 0; i < guidList.Count; i++)
         {
             var desc = data.GetDescription(guidList[i]);
             if (desc != null)
             {
-                Debug.Log(desc);
-                resultList.Add(guidList[i]);
+                tempList.Add(guidList[i]);
                 if (isDepend)
                 {
                     if (desc.dependencies.Count > 0)
                     {
-                        for (int j = 0; j < resultList.Count; j++)
-                        {
-                            if (desc.dependencies.Contains(resultList[j]))
-                            {
-                                //出现嵌套（例如：A依赖B，B又依赖A），从依赖列表中移除
-                                desc.dependencies.Remove(resultList[j]);
-                            }
-                        }
-                        Recursive(desc.dependencies, resultList);
+                        Recursive(desc.dependencies, tempList);
                     }
                 }
                 else
                 {
                     if (desc.beDependencies.Count > 0)
                     {
-                        for (int j = 0; j < resultList.Count; j++)
-                        {
-                            if (desc.beDependencies.Contains(resultList[j]))
-                            {
-                                //出现嵌套（例如：A依赖B，B又依赖A），从被依赖列表中移除
-                                desc.beDependencies.Remove(resultList[j]);
-                            }
-                        }
-                        Recursive(desc.beDependencies, resultList);
+                        Recursive(desc.beDependencies, tempList);
                     }
                 }
             }
@@ -339,9 +368,16 @@ public class ReferencesFindWindow : EditorWindow
                     var desc2 = data.GetDescription(b);
                     if (desc1 != null && desc2 != null)
                     {
-                        return desc1.path.CompareTo(desc2.path);
+                        switch (sortMode)
+                        {
+                            case SortMode.path:
+                                return desc1.path.CompareTo(desc2.path);
+                            case SortMode.name:
+                                return desc1.name.CompareTo(desc2.name);
+                            case SortMode.type:
+                                return desc1.ext.CompareTo(desc2.ext);
+                        }
                     }
-
                     return 0;
                 });
             else
@@ -351,9 +387,16 @@ public class ReferencesFindWindow : EditorWindow
                     var desc2 = data.GetDescription(b);
                     if (desc1 != null && desc2 != null)
                     {
-                        return desc1.path.CompareTo(desc2.path);
+                        switch (sortMode)
+                        {
+                            case SortMode.path:
+                                return desc1.path.CompareTo(desc2.path);
+                            case SortMode.name:
+                                return desc1.name.CompareTo(desc2.name);
+                            case SortMode.type:
+                                return desc1.ext.CompareTo(desc2.ext);
+                        }
                     }
-
                     return 0;
                 });
 
@@ -377,6 +420,7 @@ public class AssetDescription
 {
     public string name;
     public string path;
+    public string ext;
     /// <summary>
     /// 依赖信息hash
     /// </summary>

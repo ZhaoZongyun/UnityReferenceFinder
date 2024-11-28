@@ -48,6 +48,7 @@ public class ReferenceData
                         AssetDescription desc = new AssetDescription();
                         desc.name = Path.GetFileName(path);
                         desc.path = path;
+                        desc.ext = Path.GetExtension(path);
                         desc.dependencyHash = hash.ToString();
                         desc.dependencies = guids;
 
@@ -63,7 +64,7 @@ public class ReferenceData
                 }
             }
 
-            Debug.Log($"收集了{count}个资源的依赖信息");
+            Debug.Log($"Assets 下共有{count}个资源的依赖信息");
             EditorUtility.ClearProgressBar();
         }
         catch (System.Exception e)
@@ -163,6 +164,7 @@ public class ReferenceData
                 AssetDescription desc = new AssetDescription();
                 desc.name = Path.GetFileName(path);
                 desc.path = path;
+                desc.ext = Path.GetExtension(path);
                 desc.dependencyHash = dependencyHashList[i];
                 assetDict.Add(guidList[i], desc);
             }
