@@ -28,7 +28,6 @@ public class EditorGlobal : MonoBehaviour
         string path = AssetDatabase.GetAssetPath(editor.target);
         if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/"))
         {
-            UnityEngine.Debug.LogError($"路径错误 {path}");
             return;
         }
 
